@@ -1,5 +1,5 @@
 metadata {
-  definition (name: "AirBNB-LCM-Unit-driver", namespace: "mepholdings", author: "Mark E Penzien") {
+  definition (name: "AirBNB-LCM-Unit", namespace: "mepholdings", author: "Mark E Penzien") {
     capability "Actuator"
     
     singleThreaded: true
