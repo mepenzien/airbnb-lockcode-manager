@@ -1,10 +1,12 @@
 metadata {
-  definition (name: "AirBNB-LCM-Unit", namespace: "mepholdings", author: "Mark E Penzien") {
+  definition (name: "ALCM-Unit-driver", namespace: "mepholdings", author: "Mark E Penzien") {
     capability "Actuator"
     
     singleThreaded: true
     
-    command "addRsvn", [[name: "rsvnPosition", type: "ENUM", constraints: ["current", "next", "leaving"], description: "Is this for a CURRENT reservation, the NEXT reservation to check in, or an existing reservation that is LEAVING today?"],
+    command "manualAddRsvn", [[name: "rsvnPosition", type: "ENUM", constraints: ["current", "next", "leaving"], description: "Is this for a CURRENT reservation, the NEXT reservation to check in, or an existing reservation that is LEAVING today?"],
+                              [name: "rsvnKey", type: "STRING", description: "A unique key string to identify the reservation; <small>\"manual\" is the default</small>", required:false, defaultValue:"manual"],
+                              [name: "listing", type: "STRING", description: "The short code for the listing", required:true],
                         [name:"guestName", type:"STRING", description: "Guest Name"],
                         [name:"code", type:"NUMBER", description:"Guest's door code"],
                         [name:"start", type:"NUMBER", description:"Reservation start date in YYYYMMDD format"],
@@ -13,6 +15,11 @@ metadata {
                            [name:"end", type:"NUMBER", description:"Reservation end date in YYYYMMDD format"]]
     command "removeRsvn", [[name: "rsvnPosition", type: "ENUM", constraints: ["current", "next", "leaving"], description: "Remove a RSVN record"]]
     command "moveNextToCurr"
+    command "getVacancy"
+    command "getCurrRsvn"
+    command "getNextRsvn"
+    command "storeRsvn"
+    
     //command "resetError"
     //command "setError"
 
@@ -46,7 +53,7 @@ void installed() {
 
 void updated() {
   initialize()
-  log.info "${device.label} updated()"
+  log.info "${device.name} updated()"
   if (logEnable) runIn(1800,logsOff)
 }
 
@@ -79,17 +86,17 @@ private vsToday(int datestamp) {
 }
 
 private setBlock() {
-  if (logEnable) "${device.label} setBlock() called: ${isBlocked == true}"
+  if (logEnable) "${device.name} setBlock() called: ${isBlocked == true}"
   if(isBlocked) {
     sendEvent(name: 'isBlocked', value: true, descriptionText: "${device.label} is BLOCKED!")
   } else {
     sendEvent(name: 'isBlocked', value: false, descriptionText: "${device.label} is NOT blocked.")
   }
-  log.warn "${device.label} blocking is ${isBlocked == true}"
+  log.warn "${device.name} blocking is ${isBlocked == true}"
 }
 
 private setVacancy() {
-  log.info "${device.label} setVacancy run..."
+  log.info "${device.name} setVacancy run..."
   def vStatus = ""
   if(isBlocked) {
     vStatus = "blocked"
@@ -99,30 +106,34 @@ private setVacancy() {
       if(!device.currentValue("isBlocked")) {
         vStatus = "empty"
         sendEvent(name: 'vacancy', value: "${vStatus}", descriptionText: "${device.label} vacancy updated: ${vStatus}")
+        device.deleteCurrentState('arrivingGuest')
+        device.deleteCurrentState('currentGuest')
+        device.deleteCurrentState('leavingGuest')
       } else {
         log.warn "${device.label} is blocked!"
         return
       }
     }
     def todayStr = new Date().format('YYYYMMdd')
-    def today = todayStr.toInteger()
+    def today = todayStr.toLong()
+    log.info "Today: ${today} & start: ${nextRsvn.start}"
     
     if(state.currRsvn != null && state.nextRsvn == null) {
       if(state.currRsvn.start == today) {
         vStatus = "arriving"
-        sendEvent(name: 'arrivingGuest', value: "state.currRsvn.guestName", descriptionText: "${state.currRsvn.guestName} is arriving today to ${device.label}")
+        sendEvent(name: 'arrivingGuest', value: "${state.currRsvn.guestName}", descriptionText: "${state.currRsvn.guestName} is arriving today to ${device.label}")
         sendEvent(name: 'currentGuest', value: null)
         sendEvent(name: 'leavingGuest', value: null)
       } else if(state.currRsvn.start < today && today < state.currRsvn.end) {
         vStatus = "occupied"
         sendEvent(name: 'arrivingGuest', value: null)
-        sendEvent(name: 'currentGuest', value: "state.currRsvn.guestName")
+        sendEvent(name: 'currentGuest', value: "${state.currRsvn.guestName}")
         sendEvent(name: 'leavingGuest', value: null)
       } else if(state.currRsvn.end == today) {
         vStatus = "leaving"
         sendEvent(name: 'arrivingGuest', value: null)
         sendEvent(name: 'currentGuest', value: null)
-        sendEvent(name: 'leavingGuest', value: "state.currRsvn.guestName", descriptionText: "${state.currRsvn.guestName} is leaving today from ${device.label}")
+        sendEvent(name: 'leavingGuest', value: "${state.currRsvn.guestName}", descriptionText: "${state.currRsvn.guestName} is leaving today from ${device.label}")
       } else if(state.currRsvn.end < today || state.currRsvn.start > today) {
         log.warn "${device.label} has an invalid currRsvn:"
         log.warn "${currRsvn}"
@@ -132,10 +143,11 @@ private setVacancy() {
       }
     } else if(state.currRsvn == null && state.nextRsvn != null) {
       if(state.nextRsvn.start == today) {
-        endEvent(name: 'arrivingGuest', value: "state.nextRsvn.guestName", descriptionText: "${state.nextRsvn.guestName} is arriving today to ${device.label}")
+        log.info "test"
+        vStatus = "arriving"
+        sendEvent(name: 'arrivingGuest', value: "${state.nextRsvn.guestName}", descriptionText: "${state.nextRsvn.guestName} is arriving today to ${device.name}")
         sendEvent(name: 'currentGuest', value: null)
         sendEvent(name: 'leavingGuest', value: null)
-        return
       } else if( (state.nextRsvn.start < today) || (state.nextRsvn.end < today) ) {
         log.warn "${device.label} has invalid nextRsvn:"
         log.warn "${nextRsvn}"
@@ -147,23 +159,23 @@ private setVacancy() {
   //    nRsvn.start = nRsvn.start.toInt()
       if(state.currRsvn.start == today) {
         vStatus = "arriving"
-        sendEvent(name: 'arrivingGuest', value: "state.currRsvn.guestName", descriptionText: "${state.currRsvn.guestName} is arriving today to ${device.label}")
+        sendEvent(name: 'arrivingGuest', value: "${state.currRsvn.guestName}", descriptionText: "${state.currRsvn.guestName} is arriving today to ${device.name}")
         sendEvent(name: 'currentGuest', value: null)
         sendEvent(name: 'leavingGuest', value: null)
       } else if(state.currRsvn.end == today == state.nextRsvn.start) {
         vStatus = "sameday"
-        sendEvent(name: 'arrivingGuest', value: "state.nextRsvn.guestName", descriptionText: "${state.nextRsvn.guestName} is arriving today to ${device.label}")
+        sendEvent(name: 'arrivingGuest', value: "${state.nextRsvn.guestName}", descriptionText: "${state.nextRsvn.guestName} is arriving today to ${device.name}")
         sendEvent(name: 'currentGuest', value: null)
-        sendEvent(name: 'leavingGuest', value: "state.currRsvn.guestName", descriptionText: "${state.currRsvn.guestName} is leaving today from ${device.label}")
+        sendEvent(name: 'leavingGuest', value: "${state.currRsvn.guestName}", descriptionText: "${state.currRsvn.guestName} is leaving today from ${device.name}")
       } else if(state.currRsvn.end == today) {
         vStatus = "leaving"
         sendEvent(name: 'arrivingGuest', value: null)
         sendEvent(name: 'currentGuest', value: null)
-        sendEvent(name: 'leavingGuest', value: "state.currRsvn.guestName", descriptionText: "${state.currRsvn.guestName} is leaving today from ${device.label}")
+        sendEvent(name: 'leavingGuest', value: "${state.currRsvn.guestName}", descriptionText: "${state.currRsvn.guestName} is leaving today from ${device.name}")
       } else if( (state.currRsvn.start < today && today < state.currRsvn.end) && (today < state.nextRsvn.start) ) {
         vStatus = "occupied"
         sendEvent(name: 'arrivingGuest', value: null)
-        sendEvent(name: 'currentGuest', value: "state.currRsvn.guestName")
+        sendEvent(name: 'currentGuest', value: "${state.currRsvn.guestName}")
         sendEvent(name: 'leavingGuest', value: null)
       } else {
         log.warn "${device.label} has potential invalid currRsvn and nextRsvn:"
@@ -175,57 +187,61 @@ private setVacancy() {
   sendEvent(name: 'vacancy', value: "${vStatus}", descriptionText: "${device.label} vacancy updated: ${vStatus}")
 }
 
+// *********** Begin Manual Commands *********** //
 
-void addRsvn(String rPos, String guestName, code, start, end) {
-  log.info "${device.label} addRsvn run..."
+void manualAddRsvn(String rPos, String rsvnKey, String listing, String guestName, code, start, end) {
+  log.info "${device.label} manualAddRsvn run..."
   if(isBlocked) {
-    log.warn "${device.label} isBlocked!  addRsvn aborted for ${guestName}"
+    log.warn "${device.label} isBlocked!  manualAddRsvn aborted for ${guestName}"
     return
   }
   if(rPos != "current" && rPos != "next") return
 
-  if (logEnable) log.debug "addRsvn - ${device.label} ${rPos}: ${guestName}"
+  if (logEnable) log.debug "manualAddRsvn - ${device.label} ${rPos}: ${guestName}"
   
   if(rPos == "current") {
     if(state.currRsvn) {
       //current rsvn exists
-      if(guestName == state.currRsvn.guestName && start == state.currRsvn.start && code == state.currRsvn.code) {
+      if(key == state.currRsvn.key && guestName == state.currRsvn.guestName) {
         //update current rsvn
+        state.currRsvn.listing = listing
+        state.currRsvn.code = code
+        state.currRsvn.start = start
         state.currRsvn.end = end
       } else {
-        log.warn "addRsvn - adding new currRsvn \'${guestName}\' that doesn't match existing currRsvn ${state.currRsvn.guestName}"
+        log.warn "manualAddRsvn - adding new currRsvn \'${guestName}\' that doesn't match existing currRsvn ${state.currRsvn.guestName}"
         return
       }
     } else {
       //new current rsvn
-      TreeMap tempCurr = ["guestName":guestName, "code":code, "start":start, "end":end]
+      TreeMap tempCurr = ["key" : key, "listing" : listing, "guestName":guestName, "code":code, "start":start, "end":end]
       state.currRsvn = tempCurr
-      def myClass = getObjectClassName(state.currRsvn.start)
-      log.warn "Added RSVN with start as ${myClass}"
     }
     return
   } else if(rPos == "next") {
     if(state.nextRsvn) {
       if(state.nextRsvn.start < start) {
-        log.warn "addRsvn - adding new nextRsvn \'${guestName}\' starts later (${start}) than existing nextRsvn \'${state.nextRsvn.guestName}\' (${nextRsvn.start})"
+        log.warn "manualAddRsvn - adding new nextRsvn \'${guestName}\' starts later (${start}) than existing nextRsvn \'${state.nextRsvn.guestName}\' (${nextRsvn.start})"
         return
-      } else if(state.nextRsvn.start == start && state.nextRsvn.guestName == guestName) {
-        state.nextRsvn.guestName = guestName
+      } else if(state.nextRsvn.key == key && state.nextRsvn.guestName == guestName) {
+        state.nextRsvn.listing = listing
         state.nextRsvn.code = code
         state.nextRsvn.start = start
         state.nextRsvn.end = end
-        log.warn "addRsvn - updating info for nextRsvn \'${guestName}\'"
+        log.warn "manualAddRsvn - updating info for nextRsvn \'${guestName}\'"
       } else {
+        state.nextRsvn.key = key
+        state.nextRsvn.listing = listing
         state.nextRsvn.guestName = guestName
         state.nextRsvn.code = code
         state.nextRsvn.start = start
         state.nextRsvn.end = end
-        log.warn "addRsvn - replacing existing nextRsvn \'${nextRsvn.guestName}\' with new nextRsvn ${guestName}"
+        log.warn "manualAddRsvn - replacing existing nextRsvn \'${nextRsvn.guestName}\' with new nextRsvn ${guestName}"
       }
     } else {
-      TreeMap tempNext = ["guestName":guestName, "code":code, "start":start, "end":end]
+      TreeMap tempNext = ["key" : key, "listing" : listing, "guestName":guestName, "code":code, "start":start, "end":end]
       state.nextRsvn = tempNext
-      log.warn "addRsvn - adding new nextRsvn \'${guestName}\'"
+      log.warn "manualAddRsvn - adding new nextRsvn \'${guestName}\'"
     }
   }
   setVacancy()
@@ -277,15 +293,75 @@ void moveNextToCurr() {
   setVacancy()
 }
 
-Map getCurrRsvn() {
-  if(state.currRsvn) {
-    return state.currRsvn
-  }
-  return [:]
-}
+// *********** End Manual Commands *********** //
+
+
+// *********** Begin ALCM Commands *********** //
 
 String getVacancy() {
   return state.vacancy
 }
 
+Map getCurrRsvn(String rsvnKey) {
+  if(!state.currRsvn) {
+    log.warn "getCurrRsvn failed: currRsvn does not exist."
+    return [:]
+  }
+  if(key != currRsvn.key) {
+    log.warn "getCurrRsvn failed: passed key (${key}) doesn't match currRsvn key (${currRsvn.key})"
+    return [:]
+  }
+  return state.currRsvn
+}
 
+Map getNextRsvn() {
+  if(state.nextRsvn) {
+    return state.nextRsvn
+  }
+  return [:]
+}
+
+void storeRsvn(Map rsvn) {
+  if(currRsvn && rsvn.rsvnKey == currRsvn.rsvnKey) {
+    rsvn.put("rPos", "current")
+    addRsvn(rsvn)
+  } else {
+    rsvn.put("rPos", "next")
+    addRsvn(rsvn)
+  }
+}
+void addRsvn(Map rsvn) {
+  log.info "addRsvn called on ${device.name}"
+  if(rsvn.rPos == "current") {
+    if(rsvn.rsvnKey != state.currRsvn.rsvnKey) {
+      log.warn "addRsvn attempting to overwrite existing currRsvn (${state.currRsvn.rsvnKey}) with different rsvn (${rsvnKey})"
+      return
+    }
+    log.warn "addRsvn updating existing currRsvn with matching key ${rsvnKey}"
+    state.currRsvn = rsvn
+    return
+  }
+  if(rsvn.rPos == "next") {
+    if(state.nextRsvn) {
+      if(state.nextRsvn.start < rsvn.start) {
+        log.warn "addRsvn attempting to add a nextRsvn (${rsvn.rsvnKey} starts ${rsvn.start}) that starts later than the existing nextRsvn (${nextRsvn.rsvnKey} starts ${nextRsvn.start})"
+        return
+      }
+      if(state.nextRsvn.start == rsvn.start) {
+        log.warn "addRsvn replacing existing nextRsvn (${state.nextRsvn}) with new nextRsvn (${rsvn})"
+        state.nextRsvn = rsvn
+        return
+      }
+      if(state.nextRsvn.start > rsvn.start) {
+        log.warn "addRsvn replacing nextRsvn (${state.nextRsvn}) with new nextRsvn (${rsvn}) that starts sooner"
+        state.nextRsvn = rsvn
+        return
+      }
+    } else {
+      state.nextRsvn = rsvn
+    }
+  }
+  setVacancy()
+}
+
+// *********** End ALCM Commands *********** //
