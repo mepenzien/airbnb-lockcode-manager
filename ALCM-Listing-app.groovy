@@ -89,7 +89,7 @@ def timeSettings() {
     }
     section(getFormat('line')){}
     section(getFormat('header-green','Additional notifications')) {
-      input name: "pushover", type: "device.Pushover driver", title: "Select your Pushover notification device, if installed.", required: false
+      input name: "pushover", type: "capability.notification", title: "Select your Pushover notification device, if installed.", required: false
       input name: "extendedTimeCodeUsage", type: "bool", title: "Do you want to receive notifications outside of the normal check-in/check-out times?", default: false
     }
   }
