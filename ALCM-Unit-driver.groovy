@@ -11,14 +11,15 @@ metadata {
                         [name:"code", type:"NUMBER", description:"Guest's door code"],
                         [name:"start", type:"NUMBER", description:"Reservation start date in YYYYMMDD format"],
                         [name:"end", type:"NUMBER", description:"Reservation end date in YYYYMMDD format"]]
-    command "extendRsvn", [[name: "rsvnPosition", type: "ENUM", constraints: ["current", "next", "leaving"], description: "Extend the check-out date of a reservation.", defaultValue:"current"],
+    command "manualExtendRsvn", [[name: "rsvnPosition", type: "ENUM", constraints: ["current", "next", "leaving"], description: "Extend the check-out date of a reservation.", defaultValue:"current"],
                            [name:"end", type:"NUMBER", description:"Reservation end date in YYYYMMDD format"]]
-    command "removeRsvn", [[name: "rsvnPosition", type: "ENUM", constraints: ["current", "next", "leaving"], description: "Remove a RSVN record"]]
+    command "manualRemoveRsvn", [[name: "rsvnPosition", type: "ENUM", constraints: ["current", "next", "leaving"], description: "Remove a RSVN record"]]
     command "moveNextToCurr"
     command "getVacancy"
     command "getCurrRsvn"
     command "getNextRsvn"
     command "storeRsvn"
+    command "removeRsvn"
     
     //command "resetError"
     //command "setError"
@@ -247,13 +248,13 @@ void manualAddRsvn(String rPos, String rsvnKey, String listing, String guestName
   setVacancy()
 }
 
-void extendRsvn(String rPos, end) {
-  log.info "${device.label} extendRsvn run..."
+void manualExtendRsvn(String rPos, end) {
+  log.info "${device.label} manualExtendRsvn run..."
   if(isBlocked) {
-    log.warn "${device.label} isBlocked!  extendRsvn aborted for ${guestName}"
+    log.warn "${device.label} isBlocked!  manualExtendRsvn aborted for ${guestName}"
     return
   }
-  log.debug "extendRsvn ${rPos} to ${end}"
+  log.debug "manualExtendRsvn ${rPos} to ${end}"
   if(rPos == "current") {
     state.currRsvn.end = end
   } else if(rPos == "next") {
@@ -262,17 +263,17 @@ void extendRsvn(String rPos, end) {
   setVacancy()
 }
 
-void removeRsvn(String rPos) {
-  log.info "${device.label} removeRsvn run..."
+void manualRemoveRsvn(String rPos) {
+  log.info "${device.label} manualRemoveRsvn run..."
   if(isBlocked) {
-    log.warn "${device.label} isBlocked!  removeRsvn still allowed for ${rPos}"
+    log.warn "${device.label} isBlocked!  manualRemoveRsvn still allowed for ${rPos}"
   }
   if(rPos == "current") {
     state.remove("currRsvn")
 //    state.currRsvn = null
   } else if (rPos == "next") {
     state.remove("nextRsvn")
-  } else log.warn "removeRsvn trying to remove invalid rsvn ${rPos}"
+  } else log.warn "manualRemoveRsvn trying to remove invalid rsvn ${rPos}"
   setVacancy()
 }
 
@@ -363,5 +364,17 @@ void addRsvn(Map rsvn) {
   }
   setVacancy()
 }
+
+void removeRsvn(rsvnKey) {
+  if(isBlocked) {
+    log.warn "${device.label} isBlocked!  removeRsvn still allowed for ${rPos}"
+  }
+  if(currRsvn && currRsvn.rsvnKey == rsvnKey) {
+    manualRemoveRsvn("current")
+  }
+  if(nextRsvn && nextRsvn.rsvnKey == rsvnKey) {
+    manualRemoveRsvn("next")
+  }
+}    
 
 // *********** End ALCM Commands *********** //
