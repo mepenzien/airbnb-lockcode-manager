@@ -1,16 +1,10 @@
-//import java.time.Month;
-//import java.time.format.TextStyle;
-//import java.util.Locale;
 import java.time.format.DateTimeFormatter
-import java.time.LocalDate
 import java.time.LocalTime
-import java.time.Duration
-//import java.time.*
 
 definition(
     name: "ALCM-Listing-app",
     namespace: "mepholdings",
-    parent: "mepholdings:ALCM-Master-app",
+    parent: "mepholdings:ALCM-Manager-app",
     author: "Mark E Penzien",
     description: "Manages per-listing settings, timing and lock-to-unit associations.",
     category: "Convenience",
@@ -117,6 +111,7 @@ def testOutput() {
 
 def installed() {
   log.info "Installed with settings: ${settings}"
+  state.rsvnQueue = []
   initialize()
 }
 
@@ -250,19 +245,40 @@ def verifyCodes() {
 def processIncomingRsvn(rsvn) {
   //log.info "${listingCode} - ${rsvn}"
   tempRsvn = [:]
-  rsvn.each {
-    tempRsvn.put(it.key, it.value)
-  }
   if(rsvn.listing == listingCode) {
-    //if(logEnabled) 
-    log.info "Incoming Rsvn for ${listingCode}: ${rsvn}"
+    rsvn.each {
+     tempRsvn.put(it.key, it.value)
+    }
+    if(queueContains(rsvn)) { updateRsvnInQueue(rsvn) } else state.rsvnQueue.put(rsvn)
+    if(logEnabled) log.info "Incoming Rsvn for ${listingCode}: ${rsvn}"
     units.each {
-      //if(logEnabled)
-      log.info "Incoming Rsvn sent to ${it.getName()}"
+      if(logEnabled) log.info "Incoming Rsvn sent to ${it.getName()}"
       it.storeRsvn(tempRsvn)
     }
   }
 }
+
+boolean queueContains(rsvn) {
+  if(!state.rsvnQueue) { return false }
+  state.rsvnQueue.each { if( it.rsvnKey == rsvn.rsvnKey ) { return true } }
+  return false
+}
+
+void sortRsvnQueue() {
+  state.rsvnQueue.sort { a, b -> a.rsvnKey <=> b.rsvnKey }
+}
+
+void removeRsvnFromQueue(rsvnKey) {
+  sortRsvnQueu()
+  state.rsvnQueue.eachWithIndex { it, index -> if(it.rsvnKey == rsvnKey) { state.rsvnQueue.remove(index) }}
+}
+
+void updateRsvnInQueue(rsvn) {
+  if(state.rsvnQueue) {
+    state.rsvnQueue.each { if( it.rsvnKey == rsvn.rsvnKey && rsvn.sendTime.compareTo(its.sendTime)) it = rsvn }
+  }
+}
+
 // *********** End RSVN Commands *********** //
 
 def setUnitVacancies() {
@@ -299,38 +315,4 @@ def getFormat(type, myText='') {
     if (type == 'title') return "<h2 style='color:#1A77C9;font-weight: bold'>${myText}</h2>"
 }
 
-/*String genCronOnce(dateStr, timeStr, offset) {
-  // dateStr -> day, mon and year
-  format = "yyyyMMdd"
-  DateTimeFormatter f = DateTimeFormatter.ofPattern(format)
-  CharSequence csD = dateStr
-  date = LocalDate.parse(csD,f)
-  DateTimeFormatter yDTF = DateTimeFormatter.ofPattern("yyyy")
-  Year = date.format(yDTF)
-  DateTimeFormatter mDTF = DateTimeFormatter.ofPattern("MMM")
-  mon = date.format(mDTF)
-  DateTimeFormatter dDTF = DateTimeFormatter.ofPattern("dd")
-  day = date.format(dDTF)
-
-  // timeStr -> min and hr
-  CharSequence csT = timeStr.substring(11,16)
-  DateTimeFormatter tDTF = DateTimeFormatter.ofPattern("HH:mm")
-  LocalTime time = LocalTime.parse(csT, tDTF)
-  // change time using offset
-  if(offset >= 0) {
-    oM = offset % 60
-    oH = (offset - oM) / 60
-    time = time + Duration.ofMinutes(oM.toLong()) + Duration.ofHours(oH.toLong())
-  } else {
-    oM = (-1 * offset) % 60
-    oH = ((-1 * offset) - oM) / 60
-    time = time - Duration.ofMinutes(oM.toLong()) - Duration.ofHours(oH.toLong())
-  }
-  DateTimeFormatter minDTF = DateTimeFormatter.ofPattern("m")
-  Min = time.format(minDTF)
-  DateTimeFormatter hrDTF = DateTimeFormatter.ofPattern("H")
-  Hr = time.format(hrDTF)
-  
-  return "0 ${Min} ${Hr} ${day} ${mon} ? ${Year}"
-}*/
 
