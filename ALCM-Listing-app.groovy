@@ -258,6 +258,15 @@ def processIncomingRsvn(rsvn) {
   }
 }
 
+void processCancelledRsv(rsvn) {
+  if(rsvn.listing == listingCode) {
+    units.each {
+      it.removeRsvn(rsvn.rsvnKey)
+    }
+    removeRsvnFromQueue(rsvn.rsvnKey)
+  }
+}
+
 boolean queueContains(rsvn) {
   if(!state.rsvnQueue) { return false }
   state.rsvnQueue.each { if( it.rsvnKey == rsvn.rsvnKey ) { return true } }
