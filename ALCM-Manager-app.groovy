@@ -250,7 +250,7 @@ def deleteRsvn() {
   cancelledRsvn.put(sendTime, timestamp)
   
   getChildApps().each {
-    it.processIncomingRsvn(cancelledRsvn)
+    it.processCancelledRsvn(cancelledRsvn)
   }
   return "Success!"
 }
