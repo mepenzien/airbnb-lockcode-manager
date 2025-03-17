@@ -1,10 +1,12 @@
+import java.time.format.DateTimeFormatter
+
 def setVersion(){
   state.name = "AirBNB Lock Code Manager"
 	state.version = "0.2"
 }
 
 definition(
-    name: "ALCM-Master-app",
+    name: "ALCM-Manager-app",
     namespace: "mepholdings",
     author: "Mark E Penzien",
     description: "Manages per-listing settings, timing and lock-to-unit associations.",
@@ -26,7 +28,8 @@ preferences {
 }
 
 mappings {
-  path("/rsvn") { action: [GET: "receiveRsvn"]}
+  path("/addrsvn") { action: [GET: "addRsvn"]}
+  path("/deletersvn") { action: [GET: "deleteRsvn"]}
 }
 
 def mainPage() {
@@ -196,8 +199,8 @@ def display2() {
 	}       
 }
 
-def receiveRsvn() {
-  log.warn "rsvn has been called with params: ${params}"
+def addRsvn() {
+  log.warn "addRsvn has been called with params: ${params}"
   slurper = new groovy.json.JsonSlurper()
   if(params.access_token) params.remove("access_token")
   incomingRsvn = [:]
@@ -210,8 +213,44 @@ def receiveRsvn() {
   incomingRsvn.start = incomingRsvn.start.toLong()
   incomingRsvn.end = incomingRsvn.end.toLong()
   
+  // change sendTime string to DateTime object
+  format = "yyyy-MM-dd'T'HH:mm:ss.SSSXX"
+  DateTimeFormatter f = DateTimeFormatter.ofPattern(format)
+  CharSequence csD = params.sendTime
+  timestamp = LocalDate.parse(csD,f)
+  incomingRsvn.remove("sendTime")
+  incomingRsvn.put(sendTime, timestamp)
+  
   getChildApps().each {
     it.processIncomingRsvn(incomingRsvn)
+  }
+  return "Success!"
+}
+
+def deleteRsvn() {
+  log.warn "deleteRsvn has been called with params: ${params}"
+  slurper = new groovy.json.JsonSlurper()
+  if(params.access_token) params.remove("access_token")
+  cancelledRsvn = [:]
+  params.each {
+    cancelledRsvn.put(it.key, it.value)
+    //log.info "${cancelledRsvn.key}"
+  }
+  
+  cancelledRsvn.code = cancelledRsvn.code.toLong()
+  cancelledRsvn.start = cancelledRsvn.start.toLong()
+  cancelledRsvn.end = cancelledRsvn.end.toLong()
+  
+  // change sendTime string to DateTime object
+  format = "yyyy-MM-dd'T'HH:mm:ss.SSSXX"
+  DateTimeFormatter f = DateTimeFormatter.ofPattern(format)
+  CharSequence csD = params.sendTime
+  timestamp = LocalDate.parse(csD,f)
+  cancelledRsvn.remove("sendTime")
+  cancelledRsvn.put(sendTime, timestamp)
+  
+  getChildApps().each {
+    it.processIncomingRsvn(cancelledRsvn)
   }
   return "Success!"
 }
