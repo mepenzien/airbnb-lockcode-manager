@@ -210,7 +210,7 @@ def installCodes(rsvn) {
   locks.each {
     it.setCode(position, code, name)
   }
-  runIn(300, verifyInstall, [data: rsvn])
+  runIn(30, verifyInstall, [data: rsvn])
   //if(extendedTimeCodeUsage) {
     //subscribe(locks, lockEvtHandler)
   //}
@@ -229,10 +229,10 @@ def removeCodes() {
   locks.each {
     it.deleteCode(position)
   }
-  runIn(300, verifyRemove, [data: rsvn])
+  runIn(30, verifyRemove, [data: rsvn])
 }
 
-def verifyCodes() {
+def verifyRemove(rsvn) {
   locks.each {
     if(it.currentValue("codeChanged") != "deleted") {
       log.warn "code removal may have failed on ${it.getLabel()} for ${rsvn}"

@@ -1,5 +1,9 @@
 metadata {
-  definition (name: "ALCM-Unit-driver", namespace: "mepholdings", author: "Mark E Penzien") {
+  definition (
+      name: "ALCM-Unit-driver",
+      namespace: "mepholdings",
+      author: "Mark E Penzien",
+      description: "Stores reservation data for a single Airbnb unit irrespective of listing") {
     capability "Actuator"
     
     singleThreaded: true
