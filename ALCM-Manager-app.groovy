@@ -9,7 +9,7 @@ definition(
     name: "ALCM-Manager-app",
     namespace: "mepholdings",
     author: "Mark E Penzien",
-    description: "Manages per-listing settings, timing and lock-to-unit associations.",
+    description: "Manages Hubitat-level settings and communications.",
     category: "Convenience",
     singleInstance: false,
     iconUrl: "",
@@ -55,6 +55,11 @@ def mainPage() {
       section(getFormat("header-green", "General")) {
         label title: "Enter a name for this parent app (optional)", required: false, defaultValue: "ALCM-Master-App"
       }
+      section(getFormat("line")) {}
+      section(getFormat("header-green", "Listings, Units and Locks")) {
+        paragraph "Please use the following options to set how whether you have multiple AirBNB/VRBO listings/units managed by this Hubitat."
+        paragraph "For the sake of ALCM, a Listing is a separate bookable listed on AirBNB/VRBO.  East listing is unique and consists of one or more units.  A Unit is a separate physical house/apartment/room."
+        paragraph "After installation is complete, hit 'Done' below to save the app, then re-open the app to create the necessary child devices and apps."
     }
   }
 }
